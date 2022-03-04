@@ -4,69 +4,25 @@
 import os
 import sys
 import json
-import click
-from dotenv import load_dotenv
+import argparse
 
 
-@click.group()
-def cli():
-    pass
+# Создаёт словарь "студент" и возвращает его
+def get_student(name, group, average_estimation):
 
-
-# Создаёт словарь "студент" и записывает его в файл
-@cli.command()
-@click.argument('file_name')
-@click.option("-n", "--name")
-@click.option("-g", "--group")
-@click.option("-av", "--average_estimation")
-def add(file_name, name, group, average_estimation):
-
-    if os.path.exists(file_name):
-
-        # Пакет dotenv
-        load_dotenv()
-        dotenv_path = os.getenv("STUDENTS_DATA")
-        if not dotenv_path:
-            click.secho('Такого файла нет', fg='red')
-            sys.exit(1)
-
-        if os.path.exists(dotenv_path):
-            students = load_students(dotenv_path)
-        else:
-            students = []
-
-        # Создать словарь.
-        student = {
-            'name': name,
-            'group': group,
-            'average_estimation': average_estimation,
-        }
-        students.append(student)
-
-        with open(dotenv_path, "w", encoding="utf-8") as fout:
-            json.dump(students, fout, ensure_ascii=False, indent=3)
-    else:
-        click.secho("Такого файла не существует")
+    # Создать словарь.
+    return {
+        'name': name,
+        'group': group,
+        'average_estimation': average_estimation,
+    }
 
 
 # Выводит список студентов
-@cli.command()
-@click.argument("file_name")
-def list(file_name):
-
-    if os.path.exists(file_name):
-
-        # Пакет dotenv
-        load_dotenv()
-        dotenv_path = os.getenv("STUDENTS_DATA")
-        if not dotenv_path:
-            click.secho('Такого файла нет', fg='red')
-            sys.exit(1)
-
-    with open(dotenv_path, "r", encoding="utf-8") as fin:
-        staff = json.load(fin)
+def show_list(staff):
 
     if staff:
+
         # Заголовок таблицы.
         line = '+-{}-+-{}-+-{}-+-{}-+'.format(
             '-' * 4,
@@ -74,7 +30,9 @@ def list(file_name):
             '-' * 20,
             '-' * 8
         )
+
         print(line)
+
         print(
             '| {:^4} | {:^30} | {:^20} | {:^8} |'.format(
                 "No",
@@ -83,6 +41,7 @@ def list(file_name):
                 "Средняя оценка"
             )
         )
+
         print(line)
 
         # Вывести данные о всех студентах.
@@ -103,14 +62,19 @@ def list(file_name):
 
 
 # Выводит справку о работе с программой
-@cli.command()
-def help():
+def show_help():
 
     print("Список команд:\n")
     print("add - добавить студента;")
     print("list - вывести список студентов;")
     print("help - отобразить справку;")
     print("exit - завершить работу с программой.")
+
+
+# Сохраняет данные в файл
+def save_students(file_name, staff):
+    with open(file_name, "w", encoding="utf-8") as fout:
+        json.dump(staff, fout, ensure_ascii=False, indent=3)
 
 
 # Читает данные из файла
@@ -120,8 +84,87 @@ def load_students(file_name):
         return file
 
 
-def main():
-    cli()
+def main(command_line=None):
+
+    # Парсер для определения имени файла
+    file_parser = argparse.ArgumentParser(add_help=False)
+    file_parser.add_argument(
+        "-d",
+        "--data",
+        action="store",
+        required=False,
+        help="The data file name"
+    )
+
+    # Основной парсер командной строки
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Субпарсер для добавления студента
+    add = subparsers.add_parser(
+        "add",
+        parents=[file_parser],
+        help="Add a new student"
+    )
+    add.add_argument(
+        "-n",
+        "--name",
+        help="The student`s name"
+    )
+    add.add_argument(
+        "-g",
+        "--group",
+        help="The student`s group"
+    )
+    add.add_argument(
+        "-ae",
+        "--average_estimation",
+        help="The student`s average estimation"
+    )
+
+    # Субпрасер показывающий список студентов
+    subparsers.add_parser(
+        "list",
+        parents=[file_parser],
+        help="Show list of student`s"
+    )
+
+    # Субпарсер для 'help'
+    subparsers.add_parser(
+        "help",
+        help="Shows 'help' information"
+    )
+
+    # Работа программы
+    args = parser.parse_args(command_line)
+
+    # Получить имя файла.
+    file_name = args.data
+    if not file_name:
+        file_name = os.environ.get("STUDENTS_DATA")
+    if not file_name:
+        print("The data file name is absent", file=sys.stderr)
+        sys.exit(1)
+    # Загрузить всех работников из файла, если файл существует.
+    is_dirty = False
+    if os.path.exists(file_name):
+        students = load_students(file_name)
+    else:
+        students = []
+
+    if args.command == "add":
+        student = get_student(args.name, args.group, args.average_estimation)
+        students.append(student)
+        is_dirty = True
+    elif args.command == "list":
+        show_list(students)
+    elif args.command == "help":
+        show_help()
+    else:
+        print("Неизвестная команда!")
+
+    if is_dirty:
+        save_students(args.data, students)
 
 
 if __name__ == '__main__':
